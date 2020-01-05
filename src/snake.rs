@@ -25,20 +25,22 @@ impl Direction {
     }
 }
 
-#[derive(Debug, Clone)]
-struct Block {
-    x: i32,
-    y: i32,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Block {
+    pub x: i32,
+    pub y: i32,
 }
 
 pub struct Snake {
     direction: Direction,
     body: LinkedList<Block>,
     tail: Option<Block>,
+    max_x: i32,
+    max_y: i32,
 }
 
 impl Snake {
-    pub fn new(x: i32, y: i32) -> Snake {
+    pub fn new(x: i32, y: i32, max_x: i32, max_y: i32) -> Snake {
         let mut body: LinkedList<Block> = LinkedList::new();
         body.push_back(Block { x: x + 2, y });
         body.push_back(Block { x: x + 1, y });
@@ -48,6 +50,8 @@ impl Snake {
             direction: Direction::Right,
             body,
             tail: None,
+            max_x,
+            max_y,
         }
     }
 
@@ -67,26 +71,8 @@ impl Snake {
             self.direction = d;
         }
 
-        let (last_x, last_y): (i32, i32) = self.head_position();
-
-        let new_block = match self.direction {
-            Direction::Up => Block {
-                x: last_x,
-                y: last_y - 1,
-            },
-            Direction::Down => Block {
-                x: last_x,
-                y: last_y + 1,
-            },
-            Direction::Left => Block {
-                x: last_x - 1,
-                y: last_y,
-            },
-            Direction::Right => Block {
-                x: last_x + 1,
-                y: last_y,
-            },
-        };
+        let (x, y) = self.next_head(dir);
+        let new_block = Block { x, y };
         self.body.push_front(new_block);
         let removed_block = self.body.pop_back().unwrap();
         self.tail = Some(removed_block);
@@ -104,10 +90,10 @@ impl Snake {
             moving_dir = d;
         }
         match moving_dir {
-            Direction::Up => (head_x, head_y - 1),
-            Direction::Down => (head_x, head_y + 1),
-            Direction::Left => (head_x - 1, head_y),
-            Direction::Right => (head_x + 1, head_y),
+            Direction::Up => (head_x, if head_y == 0 { self.max_y } else { head_y - 1 }),
+            Direction::Down => (head_x, if head_y == self.max_y { 0 } else { head_y + 1 }),
+            Direction::Left => (if head_x == 0 { self.max_x } else { head_x - 1 }, head_y),
+            Direction::Right => (if head_x == self.max_x { 0 } else { head_x + 1 }, head_y),
         }
     }
 

@@ -4,7 +4,11 @@ use piston_window::*;
 use rand::{thread_rng, Rng};
 
 use crate::draw::{draw_block, draw_rectangle};
-use crate::snake::{Direction, Snake};
+use crate::snake::{Block, Direction, Snake};
+
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader};
 
 const FOOD_COLOR: Color = [0.8, 0.0, 0.0, 1.0];
 const BORDER_COLOR: Color = [0.0, 0.0, 0.0, 1.0];
@@ -15,6 +19,7 @@ const RESTART_TIME: f64 = 1.0;
 
 pub struct Game {
     snake: Snake,
+    blocks: HashSet<Block>,
 
     food_exists: bool,
     food_x: i32,
@@ -30,11 +35,12 @@ pub struct Game {
 impl Game {
     pub fn new(width: i32, height: i32) -> Game {
         Game {
-            snake: Snake::new(2, 2),
+            snake: Snake::new(2, 2, width - 1, height - 1),
+            blocks: HashSet::new(),
             waiting_time: 0.0,
-            food_exists: true,
-            food_x: 6,
-            food_y: 4,
+            food_exists: false,
+            food_x: 0,
+            food_y: 0,
             width,
             height,
             game_over: false,
@@ -73,10 +79,9 @@ impl Game {
             draw_block(FOOD_COLOR, self.food_x, self.food_y, con, g);
         }
 
-        draw_rectangle(BORDER_COLOR, 0, 0, self.width, 1, con, g);
-        draw_rectangle(BORDER_COLOR, 0, self.height - 1, self.width, 1, con, g);
-        draw_rectangle(BORDER_COLOR, 0, 0, 1, self.height, con, g);
-        draw_rectangle(BORDER_COLOR, self.width - 1, 0, 1, self.height, con, g);
+        for b in &self.blocks {
+            draw_block(BORDER_COLOR, b.x, b.y, con, g);
+        }
 
         if self.game_over {
             draw_rectangle(GAMEOVER_COLOR, 0, 0, self.width, self.height, con, g);
@@ -112,10 +117,15 @@ impl Game {
 
     fn check_if_snake_alive(&self, dir: Option<Direction>) -> bool {
         let (next_x, next_y): (i32, i32) = self.snake.next_head(dir);
-        if self.snake.overlap_tail(next_x, next_y) {
-            return false;
-        }
-        next_x > 0 && next_y > 0 && next_x < self.width - 1 && next_y < self.height - 1
+        let overlap = self.snake.overlap_tail(next_x, next_y);
+        let crash = self.check_in_blocks(next_x, next_y);
+
+        !overlap && !crash
+    }
+
+    fn check_in_blocks(&self, x: i32, y: i32) -> bool {
+        let b = Block { x, y };
+        self.blocks.contains(&b)
     }
 
     fn add_food(&mut self) {
@@ -123,7 +133,7 @@ impl Game {
 
         let mut new_x = rng.gen_range(1, self.width - 1);
         let mut new_y = rng.gen_range(1, self.height - 1);
-        while self.snake.overlap_tail(new_x, new_y) {
+        while self.snake.overlap_tail(new_x, new_y) || self.check_in_blocks(new_x, new_y) {
             new_x = rng.gen_range(1, self.width - 1);
             new_y = rng.gen_range(1, self.height - 1);
         }
@@ -144,11 +154,39 @@ impl Game {
     }
 
     fn restart(&mut self) {
-        self.snake = Snake::new(2, 2);
+        self.snake = Snake::new(2, 2, self.width - 1, self.height - 1);
         self.waiting_time = 0.0;
-        self.food_exists = true;
-        self.food_x = 6;
-        self.food_y = 4;
+        self.food_exists = false;
         self.game_over = false;
+    }
+
+    pub fn load_map(&mut self, path: &String) -> io::Result<()> {
+        let f = BufReader::new(File::open(path)?);
+        for (y, line) in f.lines().enumerate() {
+            if y as i32 >= self.height {
+                continue;
+            }
+            for (x, c) in line?.chars().enumerate() {
+                if x as i32 >= self.width {
+                    break;
+                }
+                match c {
+                    '#' => {
+                        self.blocks.insert(Block {
+                            x: x as i32,
+                            y: y as i32,
+                        });
+                    }
+                    '@' => {
+                        self.food_exists = true;
+                        self.food_x = x as i32;
+                        self.food_y = y as i32;
+                    }
+                    ' ' => {}
+                    _ => unimplemented!("Unexpected symbol"),
+                }
+            }
+        }
+        Ok(())
     }
 }
