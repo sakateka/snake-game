@@ -13,9 +13,7 @@ use std::io;
 
 const BACK_COLOR: Color = [0.5, 0.5, 0.5, 1.0];
 fn main() -> io::Result<()> {
-    let map = env::args()
-        .skip(1)
-        .next()
+    let map = env::args().nth(1)
         .unwrap_or("maps/1.txt".to_string());
     let (width, height) = (30, 30);
 
